@@ -1,87 +1,93 @@
 #include <SDL2/SDL.h>
 #include <SDL2//SDL_ttf.h>
+#include <SDL2/SDL_image.h>
 #include <stdbool.h>
 #include <time.h>
-#include <stdio.h>
 
 #define MAP_SIZE 27 //地图大小
-#define W ((MAP_SIZE)*20+1)
-#define H ((MAP_SIZE)*20+1+100)
-#define FONT_SIZE 72
-#define FRAME 75
+#define W ((MAP_SIZE)*20+1)//窗口大小
+#define H ((MAP_SIZE)*20+1+100)//窗口大小
+#define FONT_SIZE 144//字体分配空间
+#define FRAME 75//刷新率75ms一次
 
-SDL_Texture *texture = NULL;
-SDL_Surface *surface = NULL;
+SDL_Texture *texture = NULL; //渲染用
+SDL_Surface *surface = NULL; //渲染用
 SDL_Window *window; //窗口
-SDL_Renderer *renderer;//渲染
+SDL_Renderer *renderer;//渲染器
 TTF_Font *font;//字体
 
-int map[MAP_SIZE + 1][MAP_SIZE + 1];
+int map[MAP_SIZE + 1][MAP_SIZE + 1]; //储存地图信息
 
-typedef struct SnakeNode {
+typedef struct SnakeNode {       //蛇的身体信息链表
     int x;//在map上坐标 head中方向
     int y;//在map上坐标 head中数量
     struct SnakeNode *next;
     struct SnakeNode *front;
 } SnakeNode;
-SnakeNode *head, *tail;
+SnakeNode *head;
+SnakeNode *tail;
 
-enum {
+enum { //四个方向
     UP, DOWN, LEFT, RIGHT
 };
 
-enum {
+enum { //地图元素
     NOTHING, SNAKE, FOOD, BARRIER
 };
 
-bool InitGame();
+void Load();
 
-void Clear();
+bool InitGame();//初始化游戏
 
-SnakeNode *HeadInsert(int x, int y);
+void Clear();//清除所有参数（重开）
 
-void Move();
+SnakeNode *HeadInsert(int x, int y);//在蛇头部插入节点
 
-bool Check();
+void Move();//计算蛇头下一次移动位置
 
-void EventControl();
+bool Check();//检查当前场面
 
-void Draw();
+void EventControl();//核心循环
 
-void PrintText(char *str, int r, int g, int b, int a, int x, int y, int w, int h);
+void Draw();//绘图
 
-void CreateFood(int count);
+void PrintText(char *str, Uint8 r, Uint8 g, Uint8 b, Uint8 a, int x, int y, int w, int h);//渲染文字
 
-void Quit();
+void PrintImage(char *imgae_path,int x, int y, int w, int h);//画图片
+
+void CreateFood(int count);//随机生成食物
+
+void Quit();//退出，销毁
 
 #undef main
 
 int main(void) {
+    Load();
+    EventControl();
+    Quit();
+    return 1;
+}
+
+void Load() {
     //加载窗口和渲染器
     if (SDL_InitSubSystem(SDL_INIT_VIDEO)) {
         SDL_Log("SDL_InitSubSystem failed: %s", SDL_GetError());
-        return false;
     }
     window = SDL_CreateWindow("Snake", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W, H,
                               SDL_WINDOW_RESIZABLE);
     if (window == NULL) {
         SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
-        return false;
     }
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     //加载字体
     if (TTF_Init() != 0) {
         SDL_Log("TTF_Init failed: %s", TTF_GetError());
-        return false;
     }
     font = TTF_OpenFont("C:\\Windows\\Fonts\\CENTURY.TTF", FONT_SIZE);
     if (!font) {
         SDL_Log("TTF_OpenFont failed: %s", TTF_GetError());
-        return false;
     }
-    EventControl();
-    Quit();
-    return 1;
+    IMG_Init(IMG_INIT_PNG);
 }
 
 void Clear() {
@@ -107,9 +113,9 @@ bool InitGame() {
     head->y = 0;
     head->next = NULL;
     head->front = NULL;
-    tail = HeadInsert(MAP_SIZE / 2+1, MAP_SIZE / 2);
-    HeadInsert(MAP_SIZE / 2+1, MAP_SIZE / 2 - 1);
-    HeadInsert(MAP_SIZE / 2+1, MAP_SIZE / 2 - 2);
+    tail = HeadInsert(MAP_SIZE / 2 + 1, MAP_SIZE / 2);
+    HeadInsert(MAP_SIZE / 2 + 1, MAP_SIZE / 2 - 1);
+    HeadInsert(MAP_SIZE / 2 + 1, MAP_SIZE / 2 - 2);
     //边界
     for (int i = 1; i <= MAP_SIZE; ++i) {
         map[i][MAP_SIZE] = BARRIER;
@@ -117,8 +123,8 @@ bool InitGame() {
         map[i][1] = BARRIER;
         map[1][i] = BARRIER;
     }
-    for (int i = 9; i <= 19 ; ++i) {
-        if (13<=i && i<= 15) continue;
+    for (int i = 9; i <= 19; ++i) {
+        if (13 <= i && i <= 15) continue;
         map[i][19] = BARRIER;
         map[19][i] = BARRIER;
         map[i][9] = BARRIER;
@@ -132,13 +138,8 @@ bool InitGame() {
     return true;
 }
 
-void Quit() {
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-}
-
 void EventControl() {
-    if (!InitGame()) return;
+    InitGame();
     SDL_Event event;
     Draw();
     while (true) {
@@ -163,6 +164,8 @@ void EventControl() {
                         break;
                     case SDLK_ESCAPE:
                         return;
+                    default :
+                        break;
                 }
                 break;
             }
@@ -170,7 +173,8 @@ void EventControl() {
         Move();
         if (!Check()) {
             SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-            PrintText("You lose.Press any button to replay", 0, 150, 255, 255, MAP_SIZE * 10 - 250, MAP_SIZE * 10, 500, 100);
+            PrintText("You lose.Press any button to replay", 0, 150, 255, 255, MAP_SIZE * 10 - 250, MAP_SIZE * 10, 500,
+                      100);
             SDL_RenderPresent(renderer);
             while (true) {
                 while (SDL_PollEvent(&event)) {
@@ -181,13 +185,15 @@ void EventControl() {
                             Clear();
                             EventControl();
                             return;
+                        default :
+                            break;
                     }
                 }
             }
         }
         Draw();
         unsigned long long end = SDL_GetTicks64();
-        if (FRAME > (end - start)) SDL_Delay(FRAME - (end - start));
+        if (FRAME > (end - start)) SDL_Delay(FRAME - (unsigned int) (end - start));
     }
 }
 
@@ -199,9 +205,9 @@ void Draw() {
     for (int i = 0; i < MAP_SIZE; ++i) {//横线
         SDL_RenderDrawLine(renderer, 0, i * 20, W, i * 20);
     }
-    SDL_RenderDrawLine(renderer, 0, (MAP_SIZE) * 20 + 1, W, (MAP_SIZE) * 20 + 1);
+    SDL_RenderDrawLine(renderer, 0, MAP_SIZE * 20 + 1, W, MAP_SIZE * 20 + 1);
     for (int i = 0; i < MAP_SIZE; ++i) {//竖线
-        SDL_RenderDrawLine(renderer, i * 20, 0, i * 20, (MAP_SIZE) * 20 + 1);
+        SDL_RenderDrawLine(renderer, i * 20, 0, i * 20, MAP_SIZE * 20 + 1);
     }
     SDL_RenderDrawLine(renderer, W, 0, W, H);
 
@@ -209,13 +215,38 @@ void Draw() {
     for (int i = 1; i <= MAP_SIZE; ++i) {
         for (int j = 1; j <= MAP_SIZE; ++j) {
             if (map[i][j] == SNAKE) {
-                SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-                SDL_Rect rect = {(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19};
-                SDL_RenderFillRect(renderer, &rect);
+                if (i == head->next->x && j == head->next->y) {
+                    switch (head->x) {
+                        case UP:
+                            PrintImage("picture\\snake_up.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                            break;
+                        case DOWN:
+                            PrintImage("picture\\snake_down.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                            break;
+                        case LEFT:
+                            PrintImage("picture\\snake_left.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                            break;
+                        case RIGHT:
+                            PrintImage("picture\\snake_right.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                            break;
+                        default:
+                            break;
+                    }
+                }else if (i == tail->x && j == tail->y) {
+                    if (tail->front->x > tail->x) {
+                        PrintImage("picture\\tail_down.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                    } else if (tail->front->x < tail->x) {
+                        PrintImage("picture\\tail_up.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                    } else if (tail->front->y > tail->y) {
+                        PrintImage("picture\\tail_right.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                    } else PrintImage("picture\\tail_left.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                }else {
+                    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+                    SDL_Rect rect = {(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19};
+                    SDL_RenderFillRect(renderer, &rect);
+                }
             } else if (map[i][j] == FOOD) {
-                SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-                SDL_Rect rect = {(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19};
-                SDL_RenderFillRect(renderer, &rect);
+                PrintImage("picture\\apple.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
             } else if (map[i][j] == BARRIER) {
                 SDL_SetRenderDrawColor(renderer, 70, 70, 70, 255);
                 SDL_Rect rect = {(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19};
@@ -258,6 +289,8 @@ void Move() {
         case RIGHT:
             HeadInsert(head->next->x, head->next->y + 1);
             break;
+        default:
+            break;
     }
 }
 
@@ -282,7 +315,8 @@ bool Check() {
 
 void CreateFood(int count) {
     while (count > 0) {
-        int random1 = rand() % MAP_SIZE + 1, random2 = rand() % MAP_SIZE + 1;
+        int random1 = rand() % MAP_SIZE + 1;
+        int random2 = rand() % MAP_SIZE + 1;
         if (map[random1][random2] == NOTHING) {
             map[random1][random2] = FOOD;
             count--;
@@ -290,7 +324,7 @@ void CreateFood(int count) {
     }
 }
 
-void PrintText(char *str, int r, int g, int b, int a, int x, int y, int w, int h) {
+void PrintText(char *str, Uint8 r, Uint8 g, Uint8 b, Uint8 a, int x, int y, int w, int h) {
     SDL_Rect text;
     SDL_Color color = {r, g, b, a};
     surface = TTF_RenderUTF8_Blended(font, str, color);
@@ -300,4 +334,23 @@ void PrintText(char *str, int r, int g, int b, int a, int x, int y, int w, int h
     text.w = w;
     text.h = h;
     SDL_RenderCopy(renderer, texture, NULL, &text);
+}
+
+void PrintImage(char *imgae_path,int x, int y, int w, int h) {
+    SDL_Rect text;
+    surface = IMG_Load(imgae_path);
+    texture = SDL_CreateTextureFromSurface(renderer, surface);
+    text.x = x;
+    text.y = y;
+    text.w = w;
+    text.h = h;
+    SDL_RenderCopy(renderer, texture, NULL, &text);
+}
+
+void Quit() {
+    IMG_Quit();
+    SDL_DestroyTexture(texture);
+    SDL_FreeSurface(surface);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
 }

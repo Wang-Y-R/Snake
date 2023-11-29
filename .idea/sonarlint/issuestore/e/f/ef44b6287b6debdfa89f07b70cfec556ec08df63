@@ -1,0 +1,11 @@
+
+4c:S959>"Remove this #undef directive.(ÙİÛ†ÿÿÿÿÿ
+tc:S5276‡"Yimplicit conversion loses integer precision: 'time_t' (aka 'long long') to 'unsigned int'(•ÛºÅ8¶æ‡İÁ1
+hc:S3776"TRefactor this function to reduce its Cognitive Complexity from 50 to the 25 allowed.(š²‰¤
+`c:S134˜"MRefactor this code to not nest more than 3 if|for|do|while|switch statements.(™°èÑ
+ec:S134´"MRefactor this code to not nest more than 3 if|for|do|while|switch statements.(ë¢Ãºıÿÿÿÿ
+tc:S3776È"TRefactor this function to reduce its Cognitive Complexity from 31 to the 25 allowed.(‰ïÓõúÿÿÿÿ8¸°ñİÁ1
+gc:S134Ú"MRefactor this code to not nest more than 3 if|for|do|while|switch statements.(Û¸§8Ü¤ÒİÁ1
+fc:S107Ç"GThis function has 9 parameters, which is greater than the 7 authorized.(°úï±ùÿÿÿÿ8•”ÔİÁ1
+yc:S995Ç"ZMake the type of this parameter a pointer-to-const. The current type of "str" is "char *".(°úï±ùÿÿÿÿ8•”ÔİÁ1
+€c:S995Ó"aMake the type of this parameter a pointer-to-const. The current type of "imgae_path" is "char *".(ÇÌÕ²ùÿÿÿÿ8–”ÔİÁ1
