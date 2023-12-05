@@ -1,14 +1,16 @@
 #include <SDL2/SDL.h>
 #include <SDL2//SDL_ttf.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_mixer.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <time.h>
 
 #define MAP_SIZE 27 //地图大小
 #define W ((MAP_SIZE)*20+1)//窗口大小
 #define H ((MAP_SIZE)*20+1+100)//窗口大小
 #define FONT_SIZE 144//字体分配空间
-#define FRAME 75//刷新率75ms一次
+#define FRAME 150//刷新率75ms一次
 
 SDL_Texture *texture = NULL; //渲染用
 SDL_Surface *surface = NULL; //渲染用
@@ -17,6 +19,7 @@ SDL_Renderer *renderer;//渲染器
 TTF_Font *font;//字体
 
 int map[MAP_SIZE + 1][MAP_SIZE + 1]; //储存地图信息
+int level = 1;
 
 typedef struct SnakeNode {       //蛇的身体信息链表
     int x;//在map上坐标 head中方向
@@ -35,13 +38,23 @@ enum { //地图元素
     NOTHING, SNAKE, FOOD, BARRIER
 };
 
+//音乐文件
+Mix_Chunk *music_eatFood;
+Mix_Chunk *music_win;
+Mix_Chunk *music_gameover;
+Mix_Music * music_journey;
+
 void Load();
 
-bool InitGame();//初始化游戏
+void InitLevel();//初始化游戏
 
 void Clear();//清除所有参数（重开）
 
+void ReadMap(FILE* fp);
+
 SnakeNode *HeadInsert(int x, int y);//在蛇头部插入节点
+
+void DetectDirection(SDL_Event*);
 
 void Move();//计算蛇头下一次移动位置
 
@@ -50,6 +63,8 @@ bool Check();//检查当前场面
 void EventControl();//核心循环
 
 void Draw();//绘图
+
+void DeathEvent(SDL_Event*);//死亡事件
 
 void PrintText(char *str, Uint8 r, Uint8 g, Uint8 b, Uint8 a, int x, int y, int w, int h);//渲染文字
 
@@ -70,7 +85,7 @@ int main(void) {
 
 void Load() {
     //加载窗口和渲染器
-    if (SDL_InitSubSystem(SDL_INIT_VIDEO)) {
+    if (SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         SDL_Log("SDL_InitSubSystem failed: %s", SDL_GetError());
     }
     window = SDL_CreateWindow("Snake", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W, H,
@@ -88,6 +103,12 @@ void Load() {
         SDL_Log("TTF_OpenFont failed: %s", TTF_GetError());
     }
     IMG_Init(IMG_INIT_PNG);
+    //打开音乐
+    if (Mix_OpenAudio(MIX_DEFAULT_FREQUENCY, MIX_DEFAULT_FORMAT, MIX_DEFAULT_CHANNELS, 4096) == -1)
+        SDL_Log("%s",SDL_GetError());
+    music_eatFood = Mix_LoadWAV("music\\getfood.wav");
+    music_gameover = Mix_LoadWAV("music\\gameover.wav");
+    music_journey = Mix_LoadMUS("music\\journey.wav");
 }
 
 void Clear() {
@@ -104,7 +125,7 @@ void Clear() {
     }
 }
 
-bool InitGame() {
+void InitLevel() {
     //清空所有数据
 
     //小蛇
@@ -113,83 +134,50 @@ bool InitGame() {
     head->y = 0;
     head->next = NULL;
     head->front = NULL;
-    tail = HeadInsert(MAP_SIZE / 2 + 1, MAP_SIZE / 2);
-    HeadInsert(MAP_SIZE / 2 + 1, MAP_SIZE / 2 - 1);
-    HeadInsert(MAP_SIZE / 2 + 1, MAP_SIZE / 2 - 2);
-    //边界
-    for (int i = 1; i <= MAP_SIZE; ++i) {
-        map[i][MAP_SIZE] = BARRIER;
-        map[MAP_SIZE][i] = BARRIER;
-        map[i][1] = BARRIER;
-        map[1][i] = BARRIER;
-    }
-    for (int i = 9; i <= 19; ++i) {
-        if (13 <= i && i <= 15) continue;
-        map[i][19] = BARRIER;
-        map[19][i] = BARRIER;
-        map[i][9] = BARRIER;
-        map[9][i] = BARRIER;
-    }
+    tail = HeadInsert(MAP_SIZE-1 , MAP_SIZE / 2+1);
+    HeadInsert(MAP_SIZE-2 , MAP_SIZE / 2+1 );
+    HeadInsert(MAP_SIZE-3 , MAP_SIZE / 2+1 );
+
+    //读入地图
+    FILE *fp = NULL;
+    ReadMap(fp);
 
     //食物
     srand(time(NULL));
     CreateFood(3);
     //
-    return true;
+    Mix_PlayMusic(music_journey,-1);
+}
+
+void ReadMap(FILE* fp) {
+    switch (level) {
+        case 1:
+            fp = fopen("level\\1.txt", "r");
+            break;
+        default:
+            break;
+    }
+    if (fp != NULL) {
+        for (int i = 1; i <= MAP_SIZE ; ++i) {
+            for (int j = 1; j <= MAP_SIZE ; ++j) {
+                fscanf(fp, "%d", &map[i][j]);
+            }
+        }
+        fclose(fp);
+    } else printf("Map load failed\n");
 }
 
 void EventControl() {
-    InitGame();
+    InitLevel();
     SDL_Event event;
     Draw();
     while (true) {
         unsigned long long start = SDL_GetTicks64();
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                return;
-            }
-            if (event.type == SDL_KEYDOWN) {
-                switch (event.key.keysym.sym) {
-                    case SDLK_UP:
-                        if (head->x != DOWN) head->x = UP;
-                        break;
-                    case SDLK_DOWN:
-                        if (head->x != UP)head->x = DOWN;
-                        break;
-                    case SDLK_LEFT:
-                        if (head->x != RIGHT)head->x = LEFT;
-                        break;
-                    case SDLK_RIGHT:
-                        if (head->x != LEFT) head->x = RIGHT;
-                        break;
-                    case SDLK_ESCAPE:
-                        return;
-                    default :
-                        break;
-                }
-                break;
-            }
-        }
+        DetectDirection(&event);
         Move();
         if (!Check()) {
-            SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-            PrintText("You lose.Press any button to replay", 0, 150, 255, 255, MAP_SIZE * 10 - 250, MAP_SIZE * 10, 500,
-                      100);
-            SDL_RenderPresent(renderer);
-            while (true) {
-                while (SDL_PollEvent(&event)) {
-                    switch (event.type) {
-                        case SDL_QUIT:
-                            return;
-                        case SDL_KEYDOWN:
-                            Clear();
-                            EventControl();
-                            return;
-                        default :
-                            break;
-                    }
-                }
-            }
+            DeathEvent(&event);
+            return;
         }
         Draw();
         unsigned long long end = SDL_GetTicks64();
@@ -259,6 +247,8 @@ void Draw() {
     char str[10];
     PrintText("Score: ", 0, 0, 0, 255, 0, MAP_SIZE * 20 + 1, 100, 40);
     PrintText(itoa(head->y, str, 10), 0, 0, 0, 255, 100, MAP_SIZE * 20 + 4, 30, 37);
+    PrintText("Level: ", 0, 0, 0, 255, 250, MAP_SIZE * 20 + 1, 100, 40);
+    PrintText(itoa(level, str, 10), 0, 0, 0, 255, 350, MAP_SIZE * 20 + 4, 30, 37);
     SDL_RenderPresent(renderer);
 }
 
@@ -274,6 +264,34 @@ SnakeNode *HeadInsert(int x, int y) {
     node->y = y;
     return node;
 }
+
+void DetectDirection(SDL_Event *event) {
+    while (SDL_PollEvent(event)) {
+        if (event->type == SDL_QUIT) {
+            return;
+        }
+        if (event->type == SDL_KEYDOWN) {
+            switch (event->key.keysym.sym) {
+                case SDLK_UP:
+                    if (head->x != DOWN) head->x = UP;
+                    break;
+                case SDLK_DOWN:
+                    if (head->x != UP)head->x = DOWN;
+                    break;
+                case SDLK_LEFT:
+                    if (head->x != RIGHT)head->x = LEFT;
+                    break;
+                case SDLK_RIGHT:
+                    if (head->x != LEFT) head->x = RIGHT;
+                    break;
+                default :
+                    break;
+            }
+            break;
+        }
+    }
+}
+
 
 void Move() {
     switch (head->x) {
@@ -303,6 +321,7 @@ bool Check() {
     if (map[head->next->x][head->next->y] == FOOD) {
         head->y++;
         CreateFood(1);
+        Mix_PlayChannel(7,music_eatFood,0);
     } else {
         map[tail->x][tail->y] = NOTHING;
         tail = tail->front;
@@ -311,6 +330,30 @@ bool Check() {
     }
     map[head->next->x][head->next->y] = SNAKE;
     return true;
+}
+
+void DeathEvent(SDL_Event *event) {
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    PrintText("You lose.Press any button to replay", 0, 150, 255, 255, MAP_SIZE * 10 - 250, MAP_SIZE * 19 +1 +50, 500,
+              70);
+    Mix_PauseMusic();
+    Mix_PlayChannel(7,music_gameover,0);
+    SDL_RenderPresent(renderer);
+    SDL_Delay(1000);
+    while (true) {
+        while (SDL_PollEvent(event)) {
+            switch (event->type) {
+                case SDL_QUIT:
+                    return;
+                case SDL_KEYDOWN:
+                    Clear();
+                    EventControl();
+                    return;
+                default :
+                    break;
+            }
+        }
+    }
 }
 
 void CreateFood(int count) {
@@ -348,6 +391,7 @@ void PrintImage(char *imgae_path,int x, int y, int w, int h) {
 }
 
 void Quit() {
+    Mix_Quit();
     IMG_Quit();
     SDL_DestroyTexture(texture);
     SDL_FreeSurface(surface);

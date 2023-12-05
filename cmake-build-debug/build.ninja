@@ -65,7 +65,7 @@ build CMakeFiles/Snake.dir/Snake.c.obj: C_COMPILER__Snake_unscanned_Debug D$:/co
 
 build Snake.exe: C_EXECUTABLE_LINKER__Snake_Debug CMakeFiles/Snake.dir/Snake.c.obj
   FLAGS = -g
-  LINK_LIBRARIES = -lmingw32  -lSDL2main  -lSDL2  -lSDL2_ttf  -lSDL2_image  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+  LINK_LIBRARIES = -lmingw32  -lSDL2main  -lSDL2  -lSDL2_ttf  -lSDL2_image  -lSDL2_mixer  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\Snake.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
