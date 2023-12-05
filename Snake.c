@@ -7,10 +7,14 @@
 #include <time.h>
 
 #define MAP_SIZE 27 //地图大小
-#define W ((MAP_SIZE)*20+1)//窗口大小
-#define H ((MAP_SIZE)*20+1+100)//窗口大小
-#define FONT_SIZE 144//字体分配空间
-#define FRAME 150//刷新率75ms一次
+#define GRID_SIZE 19
+#define EDGE_SIZE 1
+#define ACTION_BAR_HIGH (GRID_SIZE)*5
+
+#define W ((MAP_SIZE)*(GRID_SIZE+EDGE_SIZE)+EDGE_SIZE)//窗口大小
+#define H ((MAP_SIZE)*(GRID_SIZE+EDGE_SIZE)+EDGE_SIZE+ACTION_BAR_HIGH)//窗口大小
+#define FONT_SIZE 72//字体分配空间
+
 
 SDL_Texture *texture = NULL; //渲染用
 SDL_Surface *surface = NULL; //渲染用
@@ -18,7 +22,8 @@ SDL_Window *window; //窗口
 SDL_Renderer *renderer;//渲染器
 TTF_Font *font;//字体
 
-int map[MAP_SIZE + 1][MAP_SIZE + 1]; //储存地图信息
+int frame =  150;//刷新率75ms一次
+
 int level = 1;
 
 typedef struct SnakeNode {       //蛇的身体信息链表
@@ -29,6 +34,13 @@ typedef struct SnakeNode {       //蛇的身体信息链表
 } SnakeNode;
 SnakeNode *head;
 SnakeNode *tail;
+
+struct Map {
+    int type;
+    int x;
+    int y;
+    char *texture;
+}map[MAP_SIZE+1][MAP_SIZE+1];
 
 enum { //四个方向
     UP, DOWN, LEFT, RIGHT
@@ -54,7 +66,7 @@ void ReadMap(FILE* fp);
 
 SnakeNode *HeadInsert(int x, int y);//在蛇头部插入节点
 
-void DetectDirection(SDL_Event*);
+void DetectInput(SDL_Event*);
 
 void Move();//计算蛇头下一次移动位置
 
@@ -98,7 +110,7 @@ void Load() {
     if (TTF_Init() != 0) {
         SDL_Log("TTF_Init failed: %s", TTF_GetError());
     }
-    font = TTF_OpenFont("C:\\Windows\\Fonts\\CENTURY.TTF", FONT_SIZE);
+    font = TTF_OpenFont("fonts\\STXINWEI.TTF", FONT_SIZE);
     if (!font) {
         SDL_Log("TTF_OpenFont failed: %s", TTF_GetError());
     }
@@ -109,12 +121,13 @@ void Load() {
     music_eatFood = Mix_LoadWAV("music\\getfood.wav");
     music_gameover = Mix_LoadWAV("music\\gameover.wav");
     music_journey = Mix_LoadMUS("music\\journey.wav");
+
 }
 
 void Clear() {
     for (int i = 0; i <= MAP_SIZE; ++i) {
         for (int j = 0; j <= MAP_SIZE; ++j) {
-            map[i][j] = NOTHING;
+            map[i][j].type = NOTHING;
         }
     }
     if (head->next != NULL) {
@@ -147,6 +160,8 @@ void InitLevel() {
     CreateFood(3);
     //
     Mix_PlayMusic(music_journey,-1);
+    //
+    frame = 150;
 }
 
 void ReadMap(FILE* fp) {
@@ -160,7 +175,7 @@ void ReadMap(FILE* fp) {
     if (fp != NULL) {
         for (int i = 1; i <= MAP_SIZE ; ++i) {
             for (int j = 1; j <= MAP_SIZE ; ++j) {
-                fscanf(fp, "%d", &map[i][j]);
+                fscanf(fp, "%d", &map[i][j].type);
             }
         }
         fclose(fp);
@@ -173,7 +188,7 @@ void EventControl() {
     Draw();
     while (true) {
         unsigned long long start = SDL_GetTicks64();
-        DetectDirection(&event);
+        DetectInput(&event);
         Move();
         if (!Check()) {
             DeathEvent(&event);
@@ -181,7 +196,7 @@ void EventControl() {
         }
         Draw();
         unsigned long long end = SDL_GetTicks64();
-        if (FRAME > (end - start)) SDL_Delay(FRAME - (unsigned int) (end - start));
+        if (frame > (end - start)) SDL_Delay(frame - (unsigned int) (end - start));
     }
 }
 
@@ -191,53 +206,53 @@ void Draw() {
     SDL_RenderClear(renderer);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     for (int i = 0; i < MAP_SIZE; ++i) {//横线
-        SDL_RenderDrawLine(renderer, 0, i * 20, W, i * 20);
+        SDL_RenderDrawLine(renderer, 0, i * (GRID_SIZE+EDGE_SIZE), W, i * (GRID_SIZE+EDGE_SIZE));
     }
-    SDL_RenderDrawLine(renderer, 0, MAP_SIZE * 20 + 1, W, MAP_SIZE * 20 + 1);
+    SDL_RenderDrawLine(renderer, 0, MAP_SIZE * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, W, MAP_SIZE * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE);
     for (int i = 0; i < MAP_SIZE; ++i) {//竖线
-        SDL_RenderDrawLine(renderer, i * 20, 0, i * 20, MAP_SIZE * 20 + 1);
+        SDL_RenderDrawLine(renderer, i * (GRID_SIZE+EDGE_SIZE), 0, i * (GRID_SIZE+EDGE_SIZE), MAP_SIZE * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE);
     }
     SDL_RenderDrawLine(renderer, W, 0, W, H);
 
     //填充地图元素
     for (int i = 1; i <= MAP_SIZE; ++i) {
         for (int j = 1; j <= MAP_SIZE; ++j) {
-            if (map[i][j] == SNAKE) {
+            if (map[i][j].type == SNAKE) {
                 if (i == head->next->x && j == head->next->y) {
                     switch (head->x) {
                         case UP:
-                            PrintImage("picture\\snake_up.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                            PrintImage("picture\\snake_up.png",(j - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (i - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
                             break;
                         case DOWN:
-                            PrintImage("picture\\snake_down.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                            PrintImage("picture\\snake_down.png",(j - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (i - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
                             break;
                         case LEFT:
-                            PrintImage("picture\\snake_left.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                            PrintImage("picture\\snake_left.png",(j - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (i - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
                             break;
                         case RIGHT:
-                            PrintImage("picture\\snake_right.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                            PrintImage("picture\\snake_right.png",(j - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (i - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
                             break;
                         default:
                             break;
                     }
                 }else if (i == tail->x && j == tail->y) {
                     if (tail->front->x > tail->x) {
-                        PrintImage("picture\\tail_down.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                        PrintImage("picture\\tail_down.png",(j - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (i - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
                     } else if (tail->front->x < tail->x) {
-                        PrintImage("picture\\tail_up.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                        PrintImage("picture\\tail_up.png",(j - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (i - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
                     } else if (tail->front->y > tail->y) {
-                        PrintImage("picture\\tail_right.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
-                    } else PrintImage("picture\\tail_left.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
+                        PrintImage("picture\\tail_right.png",(j - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (i - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
+                    } else PrintImage("picture\\tail_left.png",(j - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (i - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
                 }else {
                     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-                    SDL_Rect rect = {(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19};
+                    SDL_Rect rect = {(j - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (i - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE};
                     SDL_RenderFillRect(renderer, &rect);
                 }
-            } else if (map[i][j] == FOOD) {
-                PrintImage("picture\\apple.png",(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19);
-            } else if (map[i][j] == BARRIER) {
+            } else if (map[i][j].type == FOOD) {
+                PrintImage("picture\\apple.png",(j - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (i - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
+            } else if (map[i][j].type == BARRIER) {
                 SDL_SetRenderDrawColor(renderer, 70, 70, 70, 255);
-                SDL_Rect rect = {(j - 1) * 20 + 1, (i - 1) * 20 + 1, 19, 19};
+                SDL_Rect rect = {(j - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (i - 1) * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE};
                 SDL_RenderFillRect(renderer, &rect);
             }
         }
@@ -245,10 +260,10 @@ void Draw() {
 
     //显示下方信息：
     char str[10];
-    PrintText("Score: ", 0, 0, 0, 255, 0, MAP_SIZE * 20 + 1, 100, 40);
-    PrintText(itoa(head->y, str, 10), 0, 0, 0, 255, 100, MAP_SIZE * 20 + 4, 30, 37);
-    PrintText("Level: ", 0, 0, 0, 255, 250, MAP_SIZE * 20 + 1, 100, 40);
-    PrintText(itoa(level, str, 10), 0, 0, 0, 255, 350, MAP_SIZE * 20 + 4, 30, 37);
+    PrintText("Score: ", 0, 0, 0, 255, 0, MAP_SIZE * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (GRID_SIZE+EDGE_SIZE)*5, (GRID_SIZE+EDGE_SIZE)*2);
+    PrintText(itoa(head->y, str, 10), 255, 125, 0, 255, (GRID_SIZE+EDGE_SIZE)*5, MAP_SIZE * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (GRID_SIZE+EDGE_SIZE)*2, (GRID_SIZE+EDGE_SIZE)*2);
+    PrintText("Level: ", 0, 0, 0, 255, 250, MAP_SIZE * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (GRID_SIZE+EDGE_SIZE)*5, (GRID_SIZE+EDGE_SIZE)*2);
+    PrintText(itoa(level, str, 10), 0, 125, 255, 255, (GRID_SIZE+EDGE_SIZE)*18, MAP_SIZE * (GRID_SIZE+EDGE_SIZE) + EDGE_SIZE, (GRID_SIZE+EDGE_SIZE)*2, (GRID_SIZE+EDGE_SIZE)*2);
     SDL_RenderPresent(renderer);
 }
 
@@ -265,12 +280,11 @@ SnakeNode *HeadInsert(int x, int y) {
     return node;
 }
 
-void DetectDirection(SDL_Event *event) {
+void DetectInput(SDL_Event *event) {
     while (SDL_PollEvent(event)) {
         if (event->type == SDL_QUIT) {
             return;
-        }
-        if (event->type == SDL_KEYDOWN) {
+        } else if (event->type == SDL_KEYDOWN) {
             switch (event->key.keysym.sym) {
                 case SDLK_UP:
                     if (head->x != DOWN) head->x = UP;
@@ -284,10 +298,21 @@ void DetectDirection(SDL_Event *event) {
                 case SDLK_RIGHT:
                     if (head->x != LEFT) head->x = RIGHT;
                     break;
+                case SDLK_SPACE:
+                    frame = 75;
+                    break;
                 default :
                     break;
             }
             break;
+        } else if (event->type == SDL_KEYUP) {
+            switch (event->key.keysym.sym) {
+                case SDLK_SPACE:
+                    frame = 150;
+                    break;
+                default:
+                    break;
+            }
         }
     }
 }
@@ -314,34 +339,36 @@ void Move() {
 
 bool Check() {
     //死没死
-    if (map[head->next->x][head->next->y] == SNAKE || map[head->next->x][head->next->y] == BARRIER) {
+    if (map[head->next->x][head->next->y].type == SNAKE || map[head->next->x][head->next->y].type == BARRIER) {
         return false;
     }
     //有没有吃的
-    if (map[head->next->x][head->next->y] == FOOD) {
+    if (map[head->next->x][head->next->y].type == FOOD) {
         head->y++;
         CreateFood(1);
         Mix_PlayChannel(7,music_eatFood,0);
     } else {
-        map[tail->x][tail->y] = NOTHING;
+        map[tail->x][tail->y].type = NOTHING;
         tail = tail->front;
         free(tail->next);
         tail->next = NULL;
     }
-    map[head->next->x][head->next->y] = SNAKE;
+    map[head->next->x][head->next->y].type = SNAKE;
     return true;
 }
 
 void DeathEvent(SDL_Event *event) {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    PrintText("You lose.Press any button to replay", 0, 150, 255, 255, MAP_SIZE * 10 - 250, MAP_SIZE * 19 +1 +50, 500,
+    PrintText("You lose.Press any button to replay", 0, 150, 255, 255, MAP_SIZE * (GRID_SIZE+EDGE_SIZE)/2 - 250, MAP_SIZE * GRID_SIZE + EDGE_SIZE +50, 500,
               70);
     Mix_PauseMusic();
     Mix_PlayChannel(7,music_gameover,0);
     SDL_RenderPresent(renderer);
-    SDL_Delay(1000);
+    SDL_Delay(3000);
+    while (SDL_PollEvent(event));
+
     while (true) {
-        while (SDL_PollEvent(event)) {
+        if(SDL_PollEvent(event)) {
             switch (event->type) {
                 case SDL_QUIT:
                     return;
@@ -360,8 +387,8 @@ void CreateFood(int count) {
     while (count > 0) {
         int random1 = rand() % MAP_SIZE + 1;
         int random2 = rand() % MAP_SIZE + 1;
-        if (map[random1][random2] == NOTHING) {
-            map[random1][random2] = FOOD;
+        if (map[random1][random2].type == NOTHING) {
+            map[random1][random2].type = FOOD;
             count--;
         }
     }
