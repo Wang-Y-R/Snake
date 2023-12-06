@@ -7,14 +7,14 @@
 #include <time.h>
 
 #define MAP_SIZE 27 //地图大小
-int GRID_SIZE = 25;
-int EDGE_SIZE = 1;
-#define ACTION_BAR_HIGH (GRID_SIZE)*5
+#define ACTION_BAR_HIGH ((GRID_SIZE)*5)
+#define FONT_SIZE 72//字体分配空间
+#define LEVELS 10//关卡数
 
+int GRID_SIZE = 25;//网格大小
+int EDGE_SIZE = 1;//黑线大小
 int W;//= ((MAP_SIZE)*(GRID_SIZE+EDGE_SIZE)+EDGE_SIZE);//窗口大小
 int H;//= ((MAP_SIZE)*(GRID_SIZE+EDGE_SIZE)+EDGE_SIZE+ACTION_BAR_HIGH);//窗口大小
-#define FONT_SIZE 72//字体分配空间
-
 
 SDL_Texture *texture = NULL; //渲染用
 SDL_Surface *surface = NULL; //渲染用
@@ -23,8 +23,7 @@ SDL_Renderer *renderer;//渲染器
 TTF_Font *font;//字体
 
 int frame = 160;//刷新率75ms一次
-
-int level = 1;
+int level = 1; //关卡数
 
 typedef struct SnakeNode {       //蛇的身体信息链表
     int x;//在map上坐标 head中方向
@@ -43,12 +42,16 @@ struct Map {
     void *data;
 } map[MAP_SIZE + 1][MAP_SIZE + 1];
 
+char mapTexturePath[LEVELS][2][28]={"picture\\grass.jpg","picture\\apple.png"};
+SDL_Texture *mapTexture[2],*snakeTexture[2][4]; //渲染用
+char snakeTexturePath[2][4][28]={"picture\\snake_up.png","picture\\snake_down.png","picture\\snake_left.png","picture\\snake_right.png",
+                             "picture\\tail_up.png","picture\\tail_down.png","picture\\tail_left.png","picture\\tail_right.png"};
+
 enum { //四个方向
     UP, DOWN, LEFT, RIGHT
 };
-
 enum { //地图元素
-    NOTHING, SNAKE, FOOD, BARRIER
+    NOTHING,FOOD, BARRIER,SNAKE
 };
 
 //音乐文件
@@ -58,33 +61,19 @@ Mix_Chunk *music_gameover;
 Mix_Music *music_journey;
 
 void Load();
-
 void InitLevel();//初始化游戏
-
 void Clear();//清除所有参数（重开）
-
 void ReadMap(FILE *fp);
-
 SnakeNode *HeadInsert(int x, int y);//在蛇头部插入节点
-
 void DetectInput(SDL_Event *);
-
 void Move();//计算蛇头下一次移动位置
-
 bool Check();//检查当前场面
-
 void EventControl();//核心循环
-
 void Draw();//绘图
-
 void DeathEvent(SDL_Event *);//死亡事件
-
 void PrintText(char *str, Uint8 r, Uint8 g, Uint8 b, Uint8 a, int x, int y, int w, int h);//渲染文字
-
-void PrintImage(char *imgae_path, int x, int y, int w, int h);//画图片
-
+void PrintImage(SDL_Texture *texture1, int x, int y, int w, int h);//画图片
 void CreateFood(int count);//随机生成食物
-
 void Quit();//退出，销毁
 
 #undef main
@@ -143,8 +132,6 @@ void Clear() {
 }
 
 void InitLevel() {
-    //清空所有数据
-
     //小蛇
     head = (SnakeNode *) malloc(sizeof *head);
     head->x = LEFT;
@@ -154,11 +141,21 @@ void InitLevel() {
     tail = HeadInsert(MAP_SIZE - 1, MAP_SIZE / 2 + 1);
     HeadInsert(MAP_SIZE - 2, MAP_SIZE / 2 + 1);
     HeadInsert(MAP_SIZE - 3, MAP_SIZE / 2 + 1);
-
     //读入地图
     FILE *fp = NULL;
     ReadMap(fp);
-
+    //渲染图片
+    for (int i = 0; i < 2; ++i) {
+        surface = IMG_Load(mapTexturePath[level-1][i]);
+        mapTexture[i] = SDL_CreateTextureFromSurface(renderer, surface);
+    }
+    SDL_SetTextureColorMod(mapTexture[0], 255, 255, 255); // 设置透明色为白色
+    for (int i = 0; i < 4; ++i) {
+        surface = IMG_Load(snakeTexturePath[0][i]);
+        snakeTexture[0][i] = SDL_CreateTextureFromSurface(renderer, surface);
+        surface = IMG_Load(snakeTexturePath[1][i]);
+        snakeTexture[1][i] = SDL_CreateTextureFromSurface(renderer, surface);
+    }
     //食物
     srand(time(NULL));
     CreateFood(3);
@@ -223,41 +220,21 @@ void Draw() {
     //填充地图元素
     for (int i = 1; i <= MAP_SIZE; ++i) {
         for (int j = 1; j <= MAP_SIZE; ++j) {
-            if (map[i][j].type == SNAKE) {
+             if (map[i][j].type == SNAKE) {
                 if (i == head->next->x && j == head->next->y) {
-                    switch (head->x) {
-                        case UP:
-                            PrintImage("picture\\snake_up.png", (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
+                    PrintImage(snakeTexture[0][head->x], (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
                                        (i - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
-                            break;
-                        case DOWN:
-                            PrintImage("picture\\snake_down.png", (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
-                                       (i - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
-                            break;
-                        case LEFT:
-                            PrintImage("picture\\snake_left.png", (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
-                                       (i - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
-                            break;
-                        case RIGHT:
-                            PrintImage("picture\\snake_right.png", (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
-                                       (i - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
-                            break;
-                        default:
-                            break;
-                    }
                 } else if (i == tail->x && j == tail->y) {
+                    int tailFace=LEFT;
                     if (tail->front->x > tail->x) {
-                        PrintImage("picture\\tail_down.png", (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
-                                   (i - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
+                        tailFace=DOWN;
                     } else if (tail->front->x < tail->x) {
-                        PrintImage("picture\\tail_up.png", (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
-                                   (i - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
+                        tailFace=UP;
                     } else if (tail->front->y > tail->y) {
-                        PrintImage("picture\\tail_right.png", (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
-                                   (i - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
-                    } else
-                        PrintImage("picture\\tail_left.png", (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
-                                   (i - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
+                        tailFace=RIGHT;
+                    }
+                    PrintImage(snakeTexture[1][tailFace], (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
+                               (i - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
                 } else {
                     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
                     SDL_Rect rect = {(j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
@@ -265,17 +242,17 @@ void Draw() {
                     SDL_RenderFillRect(renderer, &rect);
                 }
             } else if (map[i][j].type == FOOD) {
-                PrintImage("picture\\apple.png", (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
+                PrintImage(mapTexture[FOOD], (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
                            (i - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
             } else if (map[i][j].type == BARRIER) {
                 SDL_SetRenderDrawColor(renderer, 70, 70, 70, 255);
                 SDL_Rect rect = {(j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
                                  (i - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE};
                 SDL_RenderFillRect(renderer, &rect);
-            }
+            } else PrintImage(mapTexture[0], (j - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE,
+                              (i - 1) * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, GRID_SIZE, GRID_SIZE);
         }
     }
-
     //显示下方信息：
     char str[10];
     PrintText("Score: ", 0, 0, 0, 255, 0, MAP_SIZE * (GRID_SIZE + EDGE_SIZE) + EDGE_SIZE, (GRID_SIZE + EDGE_SIZE) * 5,
@@ -441,15 +418,14 @@ void PrintText(char *str, Uint8 r, Uint8 g, Uint8 b, Uint8 a, int x, int y, int 
     SDL_RenderCopy(renderer, texture, NULL, &text);
 }
 
-void PrintImage(char *imgae_path, int x, int y, int w, int h) {
+void PrintImage(SDL_Texture *texture1, int x, int y, int w, int h) {
     SDL_Rect text;
-    surface = IMG_Load(imgae_path);
-    texture = SDL_CreateTextureFromSurface(renderer, surface);
     text.x = x;
     text.y = y;
     text.w = w;
     text.h = h;
-    SDL_RenderCopy(renderer, texture, NULL, &text);
+    if (texture1 != mapTexture[0])SDL_RenderCopy(renderer, mapTexture[0], NULL, &text);
+    SDL_RenderCopy(renderer, texture1, NULL, &text);
 }
 
 void Quit() {
